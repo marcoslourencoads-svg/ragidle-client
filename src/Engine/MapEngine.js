@@ -1256,18 +1256,6 @@ function onMapChange(pkt) {
 		   os hosts precisam ja existir. */
 		HudVertical.ligar();
 
-		/*
-		 * O MODO LEITURA (09/09/2026, pedido do dono): a tela nao apaga
-		 * enquanto o personagem esta em farm automatico.
-		 *
-		 * Ligado AQUI, e nao no `CombatCornerIdle` que ja pesquisa o mesmo
-		 * `cacaAutomatica`: aquele componente e desenho, sai de cena na troca
-		 * de mapa, e o wake lock nao pode piscar a cada viagem. Este e o
-		 * mesmo lugar onde a escala e a HUD vertical se ligam — o que vive
-		 * enquanto a sessao vive mora aqui.
-		 */
-		TelaAcesaNoFarm.ligar();
-
 		if (Configs.get('enableCashShop')) {
 			/*
 			 * O ICONE SOLTO DA LOJA DE CASH SAIU DA TELA (I5, 31/08/2026 — pedido
@@ -1298,6 +1286,36 @@ function onMapChange(pkt) {
 
 		// Map loaded
 		Network.sendPacket(new PACKET.CZ.NOTIFY_ACTORINIT());
+
+		/*
+		 * O MODO LEITURA (D-992) — a tela nao apaga durante o farm.
+		 *
+		 * ═══════════════════════════════════════════════════════════════
+		 * ELE FICA **DEPOIS** DO `NOTIFY_ACTORINIT`, E ISSO NAO E ESTILO
+		 * ═══════════════════════════════════════════════════════════════
+		 * `CZ_NOTIFY_ACTORINIT` e o pacote que diz ao servidor "estou pronto,
+		 * me poe no mapa" — e o aperto de mao que COMPLETA a entrada. Tudo o
+		 * que roda antes dele esta no CAMINHO CRITICO: uma excecao ali e o
+		 * pacote nunca sai, e o jogador nao entra no jogo.
+		 *
+		 * Esta chamada nasceu ACIMA dele, junto de `HudVertical.ligar()`, e
+		 * isso foi um erro de posicionamento: pos uma funcionalidade
+		 * COSMETICA (manter a tela acesa) na frente do que faz o jogo abrir.
+		 * E a mesma cicatriz do `ClassChangeNotice.init`, que em 20/08/2026
+		 * lancou dentro do `MapEngine` e deixou TODO jogador com tela preta —
+		 * o `CLAUDE.md` registra aquela e eu repeti o padrao.
+		 *
+		 * O `try/catch` e a segunda tranca, e ela e deliberadamente redundante
+		 * com a de dentro do modulo: **nada aqui pode custar a entrada no
+		 * jogo**, nem que o modulo mude de dono amanha. Se o modo leitura
+		 * falhar, o jogador perde a tela acesa e ganha uma linha no console —
+		 * ele nao perde o jogo.
+		 */
+		try {
+			TelaAcesaNoFarm.ligar();
+		} catch (erro) {
+			console.error('[modo leitura] nao ligou, e o jogo segue:', erro);
+		}
 
 		// Rates Info
 		if (Session.ratesInfo) {

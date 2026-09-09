@@ -165,7 +165,26 @@ async function soltar() {
 }
 
 function avaliar() {
-	if (deveManterAcesa(estadoDeAgora())) {
+	/*
+	 * O CORPO INTEIRO E PROTEGIDO, e a razao e o RELOGIO: isto roda a cada
+	 * segundo, para sempre. Uma excecao aqui nao aborta nada de fora (o
+	 * `setInterval` a engole), mas vira um erro por segundo no console de
+	 * todo jogador — ruido que esconde o proximo defeito de verdade.
+	 *
+	 * E `estadoDeAgora()` le tres campos de outro modulo (`IdleConfig`). Nao
+	 * ha contrato que garanta que eles existam para sempre; a leitura pode
+	 * lancar no dia em que aquele arquivo mudar de forma, e o modo leitura
+	 * nao pode ser quem descobre isso quebrando.
+	 */
+	let manter = false;
+	try {
+		manter = deveManterAcesa(estadoDeAgora());
+	} catch (erro) {
+		// Sem saber o estado, o seguro e SOLTAR: segurar a tela por engano
+		// gasta bateria do jogador, e o pedido do dono cobra o contrario.
+		manter = false;
+	}
+	if (manter) {
 		void pedir();
 		return;
 	}
@@ -180,6 +199,15 @@ function avaliar() {
 }
 
 function aoTrocarDeVisibilidade() {
+	/* Este e chamado pelo NAVEGADOR, fora de qualquer `try` nosso. */
+	try {
+		aoTrocarDeVisibilidadeInterno();
+	} catch (erro) {
+		/* Nada a fazer: o pior caso e o modo leitura parar de reatar. */
+	}
+}
+
+function aoTrocarDeVisibilidadeInterno() {
 	if (document.visibilityState === 'visible') {
 		/* Voltar do segundo plano NAO reata a sentinela liberada: e preciso
 		   pedir de novo. Sem isto, uma unica troca de app desligaria o modo
@@ -198,10 +226,26 @@ export function ligar() {
 	if (_ligado || !haSuporte()) {
 		return;
 	}
-	_ligado = true;
-	_timer = setInterval(avaliar, INTERVALO_MS);
-	document.addEventListener('visibilitychange', aoTrocarDeVisibilidade);
-	avaliar();
+	/*
+	 * A TRANCA DE DENTRO. O `MapEngine` ja embrulha a chamada num `try`, e
+	 * esta e redundante DE PROPOSITO: quem move a chamada de lugar amanha nao
+	 * precisa lembrar da tranca de la. O modo leitura e um conforto — ele
+	 * nunca pode ser a razao de alguem nao entrar no jogo.
+	 */
+	try {
+		_timer = setInterval(avaliar, INTERVALO_MS);
+		document.addEventListener('visibilitychange', aoTrocarDeVisibilidade);
+		_ligado = true;
+		avaliar();
+	} catch (erro) {
+		// Desfaz o que tiver ficado pela metade: relogio orfao seria pior que
+		// nao ter o modo leitura nenhum.
+		if (_timer !== null) {
+			clearInterval(_timer);
+			_timer = null;
+		}
+		_ligado = false;
+	}
 }
 
 /** Desliga e solta o lock — troca de personagem, saida do mapa, teste. */
